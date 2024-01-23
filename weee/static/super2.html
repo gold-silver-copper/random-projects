@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <link rel="stylesheet" type="text/css" href="/static/goldenlayout-base.css">
+    <link rel="stylesheet" type="text/css" href="/static/goldenlayout-dark-theme.css">
+    <style>
+        /* Set the height of the container */
+        #layoutContainer {
+            height: 100vh;
+            /* Set initial height */
+        }
+
+        /* Disable scrolling */
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="layoutContainer"></div>
+
+    <script src="/static/jquery-1.11.1.min.js"></script>
+    <script src="/static/goldenlayout.min.js"></script>
+    <script src="/static/rot.js"></script>
+
+    <script>
+        var myLayout = null; // Declare myLayout variable
+        let keyBindings = {
+            up: "ArrowUp",
+            left: "ArrowLeft",
+            right: "ArrowRight",
+            down: "ArrowDown",
+            wait: "KeyW",
+        };
+
+        var client_id = Date.now()
+        var ws = new WebSocket(`ws://localhost:8000/ws/${client_id}`);
+
+        // Create a container element within the component's content
+        var displayContainer = document.createElement('div');
+        displayContainer.id = 'rotDisplay'; // Set an ID for the container element
+        displayContainer.style.height = '100%';
+
+        // Initialize the ROT.js display
+        var display = new ROT.Display({ width: 100, height: 60 });
+        displayContainer.appendChild(display.getContainer());
+
+
+        // Create a container element within the component's content MESSAGES
+        var message_displayContainer = document.createElement('div');
+        message_displayContainer.id = 'messageDisplay'; // Set an ID for the container element
+        message_displayContainer.style.height = '100%';
+
+        // Initialize the ROT.js display
+        var message_display = new ROT.Display({ width: 100, height: 60 });
+        message_displayContainer.appendChild(message_display.getContainer());
+
+
+        // Example: Draw a green letter 'B' on the display
+        display.draw(2, 2, 'B', '#0f0');
+
+        function resizeContainer() {
+            var windowHeight = window.innerHeight;
+            var containerElement = document.getElementById('layoutContainer');
+            containerElement.style.height = windowHeight + 'px';
+            myLayout.updateSize(); // Update GoldenLayout with new size
+        }
+
+        function resizeROTDisplay(container, display) {
+            var componentElement = container.getElement()[0];
+            var componentWidth = parseInt((componentElement.clientWidth) / 10);
+            var componentHeight = parseInt((componentElement.clientHeight) / 10);
+            console.log(componentHeight)
+            display.setOptions({ width: componentWidth, height: componentHeight });
+
+        }
+
+        function update_display(game_state, container) {
+            display.clear();
+            resizeROTDisplay(container, display)
+
+            for (const character in game_state) {
+                if (character != "visible") {
+                    console.log(game_state[character])
+
+                    const noob = game_state[character]
+                    char = noob[0]
+                    x = parseInt(noob[1])
+                    y = parseInt(noob[2])
+
+                    // Draw the character
+                    display.draw(x, y, char, "#0f0")
+                }
+                if (character == "visible") {
+                    console.log("VISIBLE")
+                    for (const x in game_state[character]) {
+                        for (const y in game_state[character][x]) {
+                            if (game_state[character][x][y] == true) {
+                                console.log("TRUEEE")
+
+                                display.draw(x, y, ' ', "#f00", "#f00")
+
+                            }
+
+                        }
+
+                    }
+                }
+            }
+        }
+
+
+        var config = {
+            content: [{
+                type: 'row',
+                content: [{
+                    type: 'component',
+                    componentName: 'meow',
+                    componentState: { label: 'Component 1' },
+                    width: 80
+                }, {
+                    type: 'column',
+                    content: [{
+                        type: 'component',
+                        componentName: 'mjau',
+                        componentState: { label: 'Component 2' },
+                        height: 70
+                    }, {
+                        type: 'component',
+                        componentName: 'exampleComponent',
+                        componentState: { label: 'Component 3' },
+                        height: 30
+                    }]
+                }]
+            }]
+        };
+
+        myLayout = new GoldenLayout(config, '#layoutContainer');
+
+        myLayout.registerComponent('exampleComponent', function (container, state) {
+            container.getElement().html('<h2>' + state.label + '</h2>');
+        });
+
+        myLayout.registerComponent('meow', function (container, state) {
+            container.getElement().append(displayContainer);
+
+            //   var containers = myLayout.getComponentsByName('meow');
+            //  desu = containers[0]
+
+
+
+            ws.onmessage = function (event) {
+                //   console.log(event.data)
+                const game_state_parsed = JSON.parse(event.data)
+                //  console.log(event)
+                update_display(game_state_parsed, container)
+            };
+
+        });
+        myLayout.registerComponent('mjau', function (container, state) {
+            container.getElement().append(message_displayContainer);
+            message_display.drawText(5, 2, "Hello world");
+
+
+            // Simulating a message log
+            var messageLog = [];
+            var messageIndex = 0;
+
+            // Function to render the next message in the log
+            function renderNextMessage() {
+                message_display.clear();
+                resizeROTDisplay(container, message_display)
+                if (true) {
+                    var message = messageLog[messageIndex];
+                    message_display.drawText(5, 2, message);
+                    messageIndex++;
+                }
+                //  else { clearInterval(intervalId); }// Stop the loop when all messages have been rendered
+            }
+
+            // Example message log
+            messageLog.push("Message 1");
+            messageLog.push("Message 2");
+            messageLog.push("Message 3");
+
+            // Start the loop
+            var intervalId = setInterval(renderNextMessage, 1000); // Adjust the delay (in milliseconds) as needed
+
+
+
+        });
+        myLayout.init();
+
+
+        // Attach event listener to window resize event
+        window.addEventListener('resize', resizeContainer);
+        window.addEventListener("keydown", (event) => {
+            //   console.log(event.code)
+            if (event.code === keyBindings.up) {
+                ws.send("up")
+                message_display.drawText(5, 2, "up");
+            } else if (event.code === keyBindings.left) {
+                ws.send("left")
+                message_display.drawText(5, 2, "left");
+            } else if (event.code === keyBindings.right) {
+                ws.send("right")
+            } else if (event.code === keyBindings.down) {
+                ws.send("down")
+            } else if (event.code === keyBindings.wait) {
+                ws.send("wait")
+            }
+        });
+        // Resize container initially
+        resizeContainer();
+    </script>
+</body>
+
+</html>
